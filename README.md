@@ -299,6 +299,6 @@ flowchart TD
 ## 📄 License & Author
 Licensed under the [MIT License](LICENSE).  
 
-**Developed by:** [Your Name](https://github.com/your-username)
-*   **LinkedIn:** [your-profile-url](https://linkedin.com/in/your-profile)
-*   **GitHub:** [your-github-url](https://github.com/your-username)
+**Developed by:** [Aadil Shaikh](https://github.com/skaadil9172)
+*   **LinkedIn:** (https://linkedin.com/in/aadil-shaikh-a4080a253)
+*   **GitHub:** (https://github.com/skaadil9172)
