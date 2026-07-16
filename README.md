@@ -19,7 +19,7 @@ SnapClass is a biometrics-based student check-in portal. By integrating **face r
 *   **Vector Database Storage:** Employs Supabase PostgreSQL to store high-dimensional facial and speech embeddings.
 *   **QR-Code Course Enrollment:** Uses Segno to generate unique QR course invites that instantly link student profiles to rosters.
 *   **Production Sandbox Container:** Dockerized environment for quick local execution, encapsulating complex compilation headers.
-*   **Automatic Quality Pipeline:** Pre-configured GitHub Actions workflow checking lint standards and running mock unit tests.
+*   **Test Suite Framework:** Unit and integration test suites running Pytest validation checks on AI models.
 
 ---
 
@@ -89,7 +89,7 @@ flowchart TD
 | **Audio Processing** | Librosa (Signal downsampling and voice split extraction) |
 | **Machine Learning** | Scikit-learn (Linear SVM classification model) |
 | **Packaging** | Docker (Multi-stage compilation container) |
-| **Quality Control** | Pytest, Flake8, Github Actions CI |
+| **Quality Control** | Pytest, Flake8 |
 
 ---
 
@@ -97,11 +97,8 @@ flowchart TD
 
 ```text
 Snapclass/
-├── .github/workflows/
-│   └── python.yml             # GitHub Actions CI pipeline
 ├── docs/
-│   ├── architecture/          # Architecture visuals (architecture.png)
-│   └── screenshots/           # Application screenshots and demo folder
+│   └── architecture/          # Architecture visuals (architecture.png)
 ├── tests/
 │   ├── test_face_pipeline.py  # Mock test cases for face matcher
 │   └── test_voice_pipeline.py # Unit tests for speech math algorithms
@@ -113,8 +110,10 @@ Snapclass/
 │   └── ui/                    # Base UI and CSS layout custom styles
 ├── app.py                     # Portal entrypoint
 ├── Dockerfile                 # Multi-stage Docker deployment config
+├── LICENSE                    # MIT open-source license
+├── PROJECT_SUMMARY.md         # Technical interview prep guide
 ├── requirements.txt           # Dependency pinning
-└── .env.example               # local credentials templates
+└── .gitignore                 # Git ignore patterns
 ```
 
 ---
@@ -161,8 +160,8 @@ streamlit run app.py
 
 ---
 
-## 🖼️ screenshots & Workflows
-*(Place screenshot images under `docs/screenshots/` and reference them here)*
+## 🖼️ Screenshots & Demos
+*(Screenshots can be added locally under a `docs/screenshots/` folder if desired)*
 
 ### 1. Recommended Capture Guide (5 Screenshots)
 1.  **Home Screen Portal (`docs/screenshots/home.png`):** Selection dashboard showing clean student/teacher login panels.
