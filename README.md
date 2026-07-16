@@ -88,7 +88,6 @@ flowchart TD
 | **Biometric Engines** | Dlib (128d face vectors), Resemblyzer (256d speaker d-vectors) |
 | **Audio Processing** | Librosa (Signal downsampling and voice split extraction) |
 | **Machine Learning** | Scikit-learn (Linear SVM classification model) |
-| **Packaging** | Docker (Multi-stage compilation container) |
 | **Quality Control** | Pytest, Flake8 |
 
 ---
@@ -98,22 +97,16 @@ flowchart TD
 ```text
 Snapclass/
 ├── docs/
-│   └── architecture/          # Architecture visuals (architecture.png)
-├── tests/
-│   ├── test_face_pipeline.py  # Mock test cases for face matcher
-│   └── test_voice_pipeline.py # Unit tests for speech math algorithms
+│   └── architecture/          # System architecture diagrams
+├── tests/                     # Pytest suite files
 ├── src/
-│   ├── components/            # Shared UI dialogs, widgets, and cards
-│   ├── database/              # Supabase connections and database CRUD
-│   ├── pipelines/             # Core Face & Voice biometrics pipelines
-│   ├── screens/               # Screen routing (Home, Student, Teacher)
-│   └── ui/                    # Base UI and CSS layout custom styles
-├── app.py                     # Portal entrypoint
-├── Dockerfile                 # Multi-stage Docker deployment config
-├── LICENSE                    # MIT open-source license
-├── PROJECT_SUMMARY.md         # Technical interview prep guide
-├── requirements.txt           # Dependency pinning
-└── .gitignore                 # Git ignore patterns
+│   ├── components/            # Shared UI dialogs and modals
+│   ├── database/              # Supabase connections and query handlers
+│   ├── pipelines/             # Dlib Face ID and Resemblyzer Voice ID pipelines
+│   └── screens/               # Main Streamlit screen routes
+├── app.py                     # Streamlit application entrypoint
+├── Dockerfile                 # Multi-stage production container configuration
+└── requirements.txt           # Pinned dependency packages
 ```
 
 ---
@@ -151,31 +144,106 @@ streamlit run app.py
 
 ---
 
-## 🚀 Why This Project Stands Out (Recruiter Corner)
+## 🗄️ Database Design
 
-*   **Decoupled AI Architecture:** Separating computationally heavy biometric pipelines from UI layers keeps portal execution responsive.
-*   **On-the-Fly ML Classifier:** Rather than matching static image lists, the portal dynamically trains a Support Vector Machine on active classroom structures, optimizing multi-student prediction accuracy.
-*   **Real-world Digital Signal Processing:** Employs Librosa to split overlapping audio recordings by speech energy intervals, isolating individual student audio clips.
-*   **Cloud Vector Database:** Uses Supabase database tables to model users, course mappings, and high-dimensional vector profiles.
+### Why Supabase is Used
+Supabase is used as a serverless backend provider, allowing the Streamlit application to securely query and write to a hosted PostgreSQL instance without requiring a custom intermediary web server or custom REST APIs.
+
+### Database Architecture
+The relational database schema is structured as follows:
+
+```mermaid
+erDiagram
+    teachers {
+        int teacher_id PK
+        text username UNIQUE
+        text password "bcrypt hashed"
+        text name
+    }
+    students {
+        int student_id PK
+        text name
+        float8_array face_embedding "128 Dimensions"
+        float8_array voice_embedding "256 Dimensions"
+    }
+    subjects {
+        int subject_id PK
+        text subject_code UNIQUE
+        text name
+        text section
+        int teacher_id FK
+    }
+    subject_students {
+        int id PK
+        int student_id FK
+        int subject_id FK
+    }
+    attendance_logs {
+        int id PK
+        int student_id FK
+        int subject_id FK
+        timestamp timestamp
+        boolean is_present
+    }
+
+    teachers ||--o{ subjects : "creates"
+    students ||--o{ subject_students : "enrolls in"
+    subjects ||--o{ subject_students : "lists"
+    students ||--o{ attendance_logs : "logs"
+    subjects ||--o{ attendance_logs : "tracks"
+```
+
+*   **teachers**: Stores credential data (username and Bcrypt-salted passwords).
+*   **students**: Stores student profiles alongside nullable floating point array fields for biometric embeddings.
+*   **subjects**: Stores class registration information and maps each subject to a creator teacher.
+*   **subject_students**: Junction table handling course enrollments.
+*   **attendance_logs**: Log transactional records showing which student was present or absent for a class at a given timestamp.
+
+### Biometric Embeddings Storage
+Face and voice templates are computed locally using Dlib (128-dimensional array) and Resemblyzer (256-dimensional array). These high-dimensional features are saved in PostgreSQL columns defined as variable-length float arrays (`FLOAT8[]`), enabling direct vector query comparisons.
+
+### Attendance Record Generation
+Attendance runs generate presence logs as arrays of dictionaries (containing `student_id`, `subject_id`, `timestamp`, and `is_present` boolean values). These logs are bulk-inserted in a single transaction database call to minimize latency.
 
 ---
 
-## 🖼️ Screenshots & Demos
-*(Screenshots can be added locally under a `docs/screenshots/` folder if desired)*
+## 🔄 Project Workflow
 
-### 1. Recommended Capture Guide (5 Screenshots)
-1.  **Home Screen Portal (`docs/screenshots/home.png`):** Selection dashboard showing clean student/teacher login panels.
-2.  **Student Registration (`docs/screenshots/registration.png`):** Camera input widget and audio input analyzer showing face/voice enrolment.
-3.  **Teacher Course Hub (`docs/screenshots/teacher_hub.png`):** Portal view showing course cards, student counts, and active verification buttons.
-4.  **QR Code Course Share (`docs/screenshots/qr_invite.png`):** Join dialog showing the generated QR code and copyable URL link.
-5.  **Attendance Results Log (`docs/screenshots/attendance_log.png`):** Historical table output listing present student count percentages.
+The application workflow handles enrollment and multi-modal biometric check-ins as follows:
 
-### 2. Recommended Walkthrough GIF Flow (30–45 Seconds)
-*(Place file at `docs/screenshots/demo.gif`)*
-*   **0:00 - 0:10:** Student registers visual face profile and records a voice verification clip.
-*   **0:10 - 0:20:** Teacher logs in, creates a subject, and generates the course QR invitation.
-*   **0:20 - 0:35:** Teacher launches Face ID check-in, uploads classroom group photo, and views recognized student tags.
-*   **0:35 - 0:45:** Teacher logs voice check-ins by recording class audio, showing the real-time student match list.
+```mermaid
+flowchart TD
+    %% Teacher Flow
+    T_Login[Teacher Login] --> T_Create[Create Subject]
+    T_Create --> T_QR[Generate QR Invite Code]
+
+    %% Student Flow
+    S_Reg[Student Registration] --> S_Face[Enroll Face ID]
+    S_Face --> S_Voice[Enroll Voice ID]
+    S_Voice --> S_Save[Sync Embeddings to Supabase]
+    T_QR -->|Scan QR / Click Join Link| S_Enroll[Enroll Student in Subject]
+
+    %% Attendance Run Flow
+    T_QR --> T_Session[Initiate Attendance Session]
+    S_Enroll --> T_Session
+    T_Session --> Face_Rec[Face Recognition Run]
+    T_Session --> Voice_Rec[Voice Verification Run]
+    
+    Face_Rec --> Att_Log[Log Attendance Records]
+    Voice_Rec --> Att_Log
+    
+    Att_Log -->|Bulk Insert| DB[(Supabase DB)]
+    DB --> View_Hist[View Attendance History & Logs]
+```
+
+### End-to-End Execution Sequence
+1.  **Teacher Onboarding & Class Creation:** The teacher logs in, creates a subject, and generates a course join code QR invite link.
+2.  **Student Registration & Embedding Sync:** The student registers their face and voice samples. The systems calculate biometric embeddings and upload them to Supabase.
+3.  **Enrollment:** The student scans the QR code or clicks the join link, which associates their student record with the subject.
+4.  **Verification session:** During class, the teacher initiates an attendance session:
+    *   **Face Check:** The teacher uploads a classroom photograph. Faces are localized and compared against enrolled templates using a dynamic SVM classifier.
+    *   **Voice Check:** The teacher records sequential check-ins. The system splits the audio by silence ranges and matches the vocal vectors using cosine similarity check-ins.
+5.  **Logging & History:** The calculated attendance outcomes are batched and written into the PostgreSQL logs, making records instantly viewable under the history tabs.
 
 ---
 
