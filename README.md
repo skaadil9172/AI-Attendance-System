@@ -88,6 +88,7 @@ flowchart TD
 | **Biometric Engines** | Dlib (128d face vectors), Resemblyzer (256d speaker d-vectors) |
 | **Audio Processing** | Librosa (Signal downsampling and voice split extraction) |
 | **Machine Learning** | Scikit-learn (Linear SVM classification model) |
+| **Packaging** | Docker (Multi-stage compilation container) |
 | **Quality Control** | Pytest, Flake8 |
 
 ---
@@ -156,8 +157,8 @@ The relational database schema is structured as follows:
 erDiagram
     teachers {
         int teacher_id PK
-        text username UNIQUE
-        text password "bcrypt hashed"
+        text username "UNIQUE"
+        text password "Bcrypt Hashed"
         text name
     }
     students {
@@ -168,7 +169,7 @@ erDiagram
     }
     subjects {
         int subject_id PK
-        text subject_code UNIQUE
+        text subject_code "UNIQUE"
         text name
         text section
         int teacher_id FK
