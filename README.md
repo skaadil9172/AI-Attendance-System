@@ -52,38 +52,9 @@ SnapClass is a biometrics-based student check-in portal designed to automate att
 
 ```mermaid
 flowchart TD
-    subgraph Client [Streamlit Portal Interface]
-        UI[app.py Entrypoint]
-        HOME[home_screen.py Portal Route] --> UI
-        STUDENT[student_screen.py Portal] --> UI
-        TEACHER[teacher_screen.py Portal] --> UI
-    end
-
-    subgraph Auth [Verification & Security]
-        BCRYPT[db.py: Bcrypt Password Encryption] --> UI
-    end
-
-    subgraph Pipelines [Machine Learning Processes]
-        FACE[face_pipeline.py: Facial Descriptors]
-        VOICE[voice_pipeline.py: Audio Segmenter]
-        UI -->|Class Image Upload| FACE
-        UI -->|Classroom Voice Recording| VOICE
-        FACE -->|Dlib HOG + ResNet| SVC[Sklearn SVC Classifier]
-        VOICE -->|Librosa Activity Split| ENC[Resemblyzer VoiceEncoder]
-    end
-
-    subgraph Database [PostgreSQL Cloud Datastore]
-        CRUD[db.py: CRUD Operations]
-        UI --> CRUD
-        CRUD -->|Sync Profiles & Logs| SB[(Supabase Database)]
-    end
-
-    subgraph Analytics [Records & Codes]
-        QR[Segno QR Code Generator]
-        LOGS[Attendance Logs Dataframes]
-        TEACHER --> QR
-        TEACHER --> LOGS
-    end
+    Client[Streamlit UI Interface] -->|Facial Image / Classroom Audio| Pipelines[Biometric Pipelines: Dlib & Resemblyzer]
+    Client -->|Roster Queries & Authentication| Database[(Supabase Cloud Database)]
+    Pipelines -->|Extract Embeddings & Verify| Database
 ```
 
 ---
@@ -96,8 +67,8 @@ flowchart TD
 3.  **Database Synced:** The vectors are stored in the student's Supabase cloud database record.
 
 ### 2. Live Classroom Verification
-*   **Face ID Run:** The instructor uploads a classroom photo. The pipeline extracts 128d face vectors from all detected faces. It queries enrolled student templates, trains a scikit-learn `SVC(kernel='linear')` classifier on-the-fly, and outputs predicted student IDs. Predictions are only saved if the Euclidean distance to the matched template is $\le 0.6$.
-*   **Voice ID Run:** The instructor records sequential classroom responses. `librosa.effects.split` segments the audio by active speech intervals (silence threshold: `top_db=30`). The pipeline generates a 256d embedding for each segment and uses a cosine similarity checker (`np.dot`) to verify student identity (match threshold $\ge 0.65$).
+*   **Face Recognition Run:** The instructor uploads a classroom photo. The pipeline extracts 128d face vectors from all detected faces. It queries enrolled student templates, trains a scikit-learn `SVC(kernel='linear')` classifier on-the-fly, and outputs predicted student IDs. Predictions are only saved if the Euclidean distance to the matched template is $\le 0.6$.
+*   **Voice Recognition Run:** The instructor records sequential classroom responses. `librosa.effects.split` segments the audio by active speech intervals (silence threshold: `top_db=30`). The pipeline generates a 256d embedding for each segment and uses a cosine similarity checker (`np.dot`) to perform voice recognition matching (threshold $\ge 0.65$).
 
 ---
 
@@ -120,10 +91,19 @@ flowchart TD
 
 ---
 
+## 🏗️ Project Structure
+
+SnapClass is structured as a modular Streamlit application with decoupled components:
+*   **Presentation Layer (`src/screens/` & `src/components/`):** Streamlit views, course dashboards, modal dialogues, and custom base CSS layouts.
+*   **Machine Learning Pipelines (`src/pipelines/`):** Independent processors handling face detection, face embedding extraction, dynamic SVM training, audio segmentation, and speech d-vector embeddings.
+*   **Data Tier (`src/database/`):** Cloud connection configurations and transactional PostgreSQL queries using the Supabase client.
+
+---
+
 ## 📁 Folder Structure
 
 ```text
-Snapclass/
+SnapClass/
 ├── docs/
 │   └── architecture/          # System architecture diagrams
 ├── tests/                     # Pytest suite files
@@ -142,7 +122,7 @@ Snapclass/
 ## ⚙️ Setup & Local Execution
 
 ### Prerequisites
-*   **Python:** Version 3.10 (Strictly required for `resemblyzer` dependency compatibility).
+*   **Python:** Version 3.10 (Recommended for compatibility with Resemblyzer.)
 *   **C++ Compilers:** Required to build native `dlib` binaries (Visual Studio for Windows; CMake for macOS/Linux).
 
 ### Installation
@@ -158,12 +138,17 @@ Snapclass/
     # Windows: venv\Scripts\activate | macOS/Linux: source venv/bin/activate
     pip install -r requirements.txt
     ```
-3.  **Cloud Settings:**
-    Add your Supabase endpoint values inside `.streamlit/secrets.toml`:
-    ```toml
-    SUPABASE_URL = "https://your-project.supabase.co"
-    SUPABASE_KEY = "your-supabase-anon-key"
-    ```
+3.  **Local Environment Configurations:**
+    *   **Environment Variables:** Create a `.env` file in the root directory for general parameters:
+        ```bash
+        SUPABASE_URL=https://your-project-id.supabase.co
+        SUPABASE_KEY=your-supabase-anon-key
+        ```
+    *   **Streamlit Secrets:** Streamlit relies on `.streamlit/secrets.toml` for local secure variables:
+        ```toml
+        SUPABASE_URL = "https://your-project.supabase.co"
+        SUPABASE_KEY = "your-supabase-anon-key"
+        ```
 
 ### Run Locally
 ```bash
@@ -246,8 +231,8 @@ flowchart TD
     T_Create --> T_QR[Generate QR Invite Code]
 
     %% Student Flow
-    S_Reg[Student Registration] --> S_Face[Enroll Face ID]
-    S_Face --> S_Voice[Enroll Voice ID]
+    S_Reg[Student Registration] --> S_Face[Enroll Face Recognition]
+    S_Face --> S_Voice[Enroll Voice Recognition]
     S_Voice --> S_Save[Sync Embeddings to Supabase]
     T_QR -->|Scan QR / Click Join Link| S_Enroll[Enroll Student in Subject]
 
@@ -255,7 +240,7 @@ flowchart TD
     T_QR --> T_Session[Initiate Attendance Session]
     S_Enroll --> T_Session
     T_Session --> Face_Rec[Face Recognition Run]
-    T_Session --> Voice_Rec[Voice Verification Run]
+    T_Session --> Voice_Rec[Voice Recognition Run]
     
     Face_Rec --> Att_Log[Log Attendance Records]
     Voice_Rec --> Att_Log
@@ -288,6 +273,14 @@ flowchart TD
 
 ---
 
+## ⚠️ Current Limitations
+
+*   **Dynamic SVM Retraining Overhead:** Because the SVM classifier trains dynamically in memory during Face Recognition, verification latency scales with larger classes.
+*   **Minimum Student Registration Constraint:** At least two registered student profiles are required to train the linear SVM classifier. For single-student classes, the pipeline falls back to Euclidean distance checks.
+*   **Environment Noises in Audio Capture:** Voice Recognition splits continuous audio by silence thresholds, but does not currently handle overlapping speech or noisy environment audio filtering.
+
+---
+
 ## 🔮 Future Enhancements
 
 *   **Motion Liveness Detection:** Integrate blink and facial motion checks using OpenCV to prevent paper/screen photo spoofing.
@@ -296,10 +289,9 @@ flowchart TD
 
 ---
 
-## 📄 License & Author
-Licensed under the [MIT License](LICENSE).  
+## 👨‍💻 Author
 
-**Developed by Aadil Shaikh**
+### Aadil Shaikh
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5.svg?logo=linkedin&logoColor=white)](https://linkedin.com/in/aadil-shaikh-a4080a253)
-[![GitHub](https://img.shields.io/badge/GitHub-%23121011.svg?logo=github&logoColor=white)](https://github.com/skaadil9172)
+*   **GitHub:** [skaadil9172](https://github.com/skaadil9172)
+*   **LinkedIn:** [aadil-shaikh-a4080a253](https://linkedin.com/in/aadil-shaikh-a4080a253)
