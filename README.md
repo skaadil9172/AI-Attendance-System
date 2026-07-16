@@ -4,22 +4,45 @@
 ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?logo=supabase&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Last Commit](https://img.shields.io/github/last-commit/your-username/snapclass?style=flat-square)
-![GitHub Stars](https://img.shields.io/github/stars/your-username/snapclass?style=flat-square)
-![Issues](https://img.shields.io/github/issues/your-username/snapclass?style=flat-square)
 
-SnapClass is a biometrics-based student check-in portal. By integrating **face recognition** and **voice biometrics**, the system automates classroom attendance logging in seconds, removing manual rosters and mitigating proxy attendance.
+SnapClass is a biometrics-based student check-in portal designed to automate attendance logging. Traditional systems like roll-calls or paper sign-in sheets are time-consuming and vulnerable to proxy attendance ("buddy-punching"). This project offers a secure, multi-modal biometric solution combining face recognition and voice ID biometrics to log presence in seconds, directly synchronizing records with a PostgreSQL cloud database.
 
 ---
 
-## 📌 Project Highlights
+## 📋 Table of Contents
+1. [Core Features](#-core-features)
+2. [Project Objectives](#-project-objectives)
+3. [System Architecture](#-system-architecture)
+4. [AI Pipeline Workflows](#-ai-pipeline-workflows)
+5. [Technology Stack](#-technology-stack)
+6. [Folder Structure](#-folder-structure)
+7. [Setup & Local Execution](#-setup--local-execution)
+8. [Database Design](#-database-design)
+9. [Project Workflow](#-project-workflow)
+10. [Challenges & Solutions](#-challenges--solutions)
+11. [Future Enhancements](#-future-enhancements)
+12. [License & Author](#-license--author)
 
-*   **Multi-Modal AI Engine:** Combines facial recognition matching and voice verification pipelines.
-*   **On-the-Fly ML Classification:** Dynamically trains a Support Vector Machine (SVM) on active classroom rosters for fast matching.
-*   **Vector Database Storage:** Employs Supabase PostgreSQL to store high-dimensional facial and speech embeddings.
-*   **QR-Code Course Enrollment:** Uses Segno to generate unique QR course invites that instantly link student profiles to rosters.
-*   **Production Sandbox Container:** Dockerized environment for quick local execution, encapsulating complex compilation headers.
-*   **Test Suite Framework:** Unit and integration test suites running Pytest validation checks on AI models.
+---
+
+## 📌 Core Features
+
+*   **Multi-Modal AI Engine:** Integrates both facial recognition and voice verification pipelines for robust biometrics check-ins.
+*   **On-the-Fly ML Classification:** Dynamically trains a Support Vector Machine (SVM) on active classroom rosters to match students in group photos.
+*   **Vector Database Storage:** Stores high-dimensional biometric vectors directly inside a serverless PostgreSQL database.
+*   **QR-Code Course Enrollment:** Generates scannable QR invites to enroll students in subjects without manual data entry.
+*   **Dockerized Environment:** Simplifies dependency setup for compilation libraries like Dlib.
+*   **Test Suite Framework:** Includes pre-configured test coverage verification checks for the machine learning pipelines.
+
+---
+
+## 🎯 Project Objectives
+
+*   **Eliminate Manual Attendance:** Replace paper sheets and verbal roll-calls with fast biometric capture.
+*   **Reduce Proxy Attendance:** Restrict check-in fraud using unique facial descriptors and voice embedding validation.
+*   **Automate Student Verification:** Identify present students from classroom photographs or vocal audio recordings.
+*   **Simplify Student Enrollment:** Streamline registration using QR code and link mapping tables.
+*   **Maintain Attendance History:** Sync and log time-stamped attendance data in a relational PostgreSQL cloud datastore.
 
 ---
 
@@ -84,12 +107,16 @@ flowchart TD
 | --- | --- |
 | **Language** | Python 3.10 |
 | **Frontend Portal** | Streamlit |
-| **Database** | Supabase Cloud (PostgreSQL Vector mapping) |
-| **Biometric Engines** | Dlib (128d face vectors), Resemblyzer (256d speaker d-vectors) |
-| **Audio Processing** | Librosa (Signal downsampling and voice split extraction) |
+| **Authentication** | Bcrypt password encryption |
+| **QR Code Generation** | Segno library |
+| **Database** | Supabase Cloud (Serverless PostgreSQL) |
+| **Database Driver** | `supabase-py` client library |
+| **Computer Vision** | Dlib frontal face detector & ResNet v1 facial feature extractor |
+| **Audio Processing** | Librosa (Audio downsampling and signal activity splitting) |
+| **Biometric Engines** | Dlib (128d face descriptors), Resemblyzer (256d speaker d-vectors) |
 | **Machine Learning** | Scikit-learn (Linear SVM classification model) |
 | **Packaging** | Docker (Multi-stage compilation container) |
-| **Quality Control** | Pytest, Flake8 |
+| **Quality Control** | Pytest unit tests, Flake8 code linting |
 
 ---
 
@@ -246,8 +273,32 @@ flowchart TD
     *   **Voice Check:** The teacher records sequential check-ins. The system splits the audio by silence ranges and matches the vocal vectors using cosine similarity check-ins.
 5.  **Logging & History:** The calculated attendance outcomes are batched and written into the PostgreSQL logs, making records instantly viewable under the history tabs.
 
+## 🛠️ Challenges & Solutions
+
+*   **Multiple Face Recognition in Group Photos:** Identifying multiple students in a single group photograph can fail due to angle and illumination variations.
+    *   *Solution:* Localized face windows using Dlib HOG frontal detectors and aligned them using shape predictors. We then trained an SVM classifier on-the-fly inside Streamlit using active student templates, bounding face predictions with a Euclidean similarity threshold ($\le 0.6$).
+*   **Voice Segmentation in Classroom Audio:** Continuous audio recorded in classrooms contains noise, silence, and background chatter.
+    *   *Solution:* Used `librosa.effects.split` to segment continuous audio into separate spoken utterances based on amplitude thresholds, rejecting segments shorter than 0.5 seconds before computing vocal d-vectors.
+*   **High-Dimensional Biometric Matching:** Comparing face (128d) and voice (256d) vectors across high volumes of database entries introduces latency.
+    *   *Solution:* Cached biometric models in memory using `@st.cache_resource` decorators. Stored embeddings in Postgres `FLOAT8[]` array columns, allowing high-speed mathematical matrix comparisons.
+*   **Attendance Logging Overhead:** Row-by-row logging queries bottleneck transaction limits.
+    *   *Solution:* Attendance records are batch-mapped to database schemas in client memory and committed using a single bulk insert transaction to Supabase.
+*   **Database Synchronization:** Managing direct secure database calls from client Streamlit instances without exposed passwords.
+    *   *Solution:* Integrated serverless `supabase-py` clients powered by Streamlit Secrets (stored in `.streamlit/secrets.toml` locally and encrypted cloud variables in production).
+
+---
+
+## 🔮 Future Enhancements
+
+*   **Motion Liveness Detection:** Integrate blink and facial motion checks using OpenCV to prevent paper/screen photo spoofing.
+*   **Roster Exporting:** Provide automated exports of attendance records to PDF and Excel spreadsheets directly from the teacher dashboard.
+*   **Multi-Class Scheduling:** Add calendar schedules to restrict attendance logs to active course hours.
+
 ---
 
 ## 📄 License & Author
 Licensed under the [MIT License](LICENSE).  
-Developed by your name. Connect with me on [GitHub](https://github.com/your-username) and [LinkedIn](https://linkedin.com/in/your-profile).
+
+**Developed by:** [Your Name](https://github.com/your-username)
+*   **LinkedIn:** [your-profile-url](https://linkedin.com/in/your-profile)
+*   **GitHub:** [your-github-url](https://github.com/your-username)
